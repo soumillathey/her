@@ -12,7 +12,7 @@ from src.devices.wifi.hotspot import is_hotspot_active
 from src.devices.wifi.scanner import scan_networks
 
 _PROBES = {"/generate_204", "/gen_204", "/hotspot-detect.html", "/canonicalizer.ucs.ed.ac.uk", "/connecttest.txt", "/ncsi.txt", "/success.txt"}
-_LOCAL_HOSTS = {"10.42.0.1", "hermes.local", "localhost", "127.0.0.1"}
+_LOCAL_HOSTS = {"10.42.0.1", "192.168.42.1", "hermes.local", "localhost", "127.0.0.1"}
 
 
 class CaptivePortalHandler(http.server.BaseHTTPRequestHandler):
@@ -39,7 +39,8 @@ class CaptivePortalHandler(http.server.BaseHTTPRequestHandler):
         path = urlsplit(self.path).path
         if path == "/connect":
             length = int(self.headers.get("Content-Length", 0))
-            payload = json.loads(self.rfile.read(length).decode("utf-8")) if length > 0 else {}
+            try: payload = json.loads(self.rfile.read(length).decode("utf-8")) if length > 0 else {}
+            except (json.JSONDecodeError, UnicodeDecodeError): payload = {}
             ssid = payload.get("ssid", "").strip()
             pwd = payload.get("password") or payload.get("passphrase", "")
             ok, msg = connect_to_wifi(ssid, pwd)
