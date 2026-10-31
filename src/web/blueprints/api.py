@@ -211,7 +211,7 @@ def post_config():
 @api_bp.route("/networks", methods=["GET"])
 @api_bp.route("/wifi/scan", methods=["GET"])
 def get_scanned_networks():
-    """Returns scanned Wi-Fi access points from balena."""
+    """Returns scanned Wi-Fi access points via nmcli."""
     from src.devices.wifi import get_available_networks
     return jsonify({"success": True, "networks": get_available_networks()}), 200
 

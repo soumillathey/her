@@ -291,7 +291,7 @@ RGB LED hardware driver and operational state indicator on Raspberry Pi GPIO.
 - **Pins & Polarity**: GPIO 17 (Red), GPIO 27 (Green), GPIO 22 (Blue), Common Anode (`active_high=False`).
 - **States & Visual Indicators**:
   - 🟢 **Green (Idle / Online)**: Scale idle at 0.0 kg and connected to Wi-Fi/Internet; ready for next vehicle. Also turns Green after cloud upload success when online.
-  - 🟡 **Yellow / Amber (Offline / Portal Active)**: Disconnected from Wi-Fi / Balena captive portal active; weighment operations are immediately blocked.
+  - 🟡 **Yellow / Amber (Offline / Portal Active)**: Disconnected from Wi-Fi / captive portal active; weighment operations are immediately blocked.
   - 🔴 **Solid Red (Active Session / Online)**: Vehicle detected and actively being weighed on scale (online only).
   - 🔵 **Blue (Cloud Transfer Success)**: Triggered for 10 seconds upon verified weighment transmission to Gluvok Cloud, then transitions back to Green (online) or Yellow (offline).
 - **Classes & Modules**:

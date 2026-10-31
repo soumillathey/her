@@ -6,17 +6,16 @@ import logging
 from src.devices.wifi import constants, runner
 from src.devices.wifi.activity import suspend_watchdog
 from src.devices.wifi.ip import get_hotspot_ip
+from src.devices.wifi.portal_capport import setup_nm_capport_config
 
 logger = logging.getLogger(__name__)
 _hotspot_active = False
-C_SSID, C_PASS = constants.DEFAULT_HOTSPOT_SSID, constants.DEFAULT_HOTSPOT_PASS
-C_CON = constants.HOTSPOT_CON_NAME
+C_SSID, C_PASS, C_CON = constants.DEFAULT_HOTSPOT_SSID, constants.DEFAULT_HOTSPOT_PASS, constants.HOTSPOT_CON_NAME
 
 
 def is_hotspot_active(con_name: str = C_CON) -> bool:
-    if not runner.is_nmcli_available() or runner.SIMULATION_STATE["enabled"]:
-        return bool(runner.SIMULATION_STATE.get("hotspot_active", _hotspot_active))
-    return _hotspot_active
+    sim = runner.SIMULATION_STATE
+    return bool(sim.get("hotspot_active", _hotspot_active)) if not runner.is_nmcli_available() or sim["enabled"] else _hotspot_active
 
 
 def start_hotspot(
@@ -50,8 +49,10 @@ def stop_hotspot(con_name: str = C_CON) -> bool:
 
 def start_emergency_hotspot(ssid: str = C_SSID, password: str = C_PASS, iface: str | None = None) -> bool:
     from src.devices.wifi.portal_service import portal_service
+    setup_nm_capport_config()
     ok = start_hotspot(ssid, password, iface)
-    return bool(portal_service.start() and ok) if ok else False
+    dev = iface or runner.get_wifi_interface()
+    return bool(portal_service.start(ip=get_hotspot_ip(dev), iface=dev) and ok) if ok else False
 
 
 def stop_emergency_hotspot(con_name: str = C_CON) -> bool:

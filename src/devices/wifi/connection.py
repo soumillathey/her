@@ -50,10 +50,9 @@ def connect_to_wifi(ssid: str, password: str = "", iface: str | None = None) -> 
     was_hotspot = hotspot.is_hotspot_active()
     ok, msg = connect_wifi(ssid, password, iface)
     if ok:
-        try:
-            save_wifi_network(ssid, password)
-        except (sqlite3.Error, OSError) as e:
-            logger.warning("Failed to save to vault: %s", e)
+        try: save_wifi_network(ssid, password)
+        except (sqlite3.Error, OSError) as e: logger.warning("Failed to save to vault: %s", e)
+        hotspot.stop_emergency_hotspot()
         return True, msg
     if was_hotspot: hotspot.start_emergency_hotspot()
     return False, msg

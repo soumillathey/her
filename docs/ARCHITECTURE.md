@@ -39,7 +39,7 @@ graph TD
     SessionMgr -->|Parallel Fleet Trigger| CamAux
     SessionMgr -->|Session Package| GluvokAPI
     WebDiag <-->|Telemetry & Reconfig| SessionMgr
-    WiFiWatchdog <-->|balena wifi-connect D-Bus| WebDiag
+    WiFiWatchdog <-->|nmcli captive portal & watchdog| WebDiag
 ```
 
 ---
@@ -55,7 +55,7 @@ graph TD
 - **Non-Blocking Real-Time Threading**: Scale serial reading is completely decoupled from disk spooling and network I/O; cloud uploads and camera captures are dispatched in dedicated background threads.
 - **Gluvok Cloud API Multipart Integration**: Matches curl specification (`curl -X POST ... -u "pi1:hardware123" -F "center_id=..." -F "detected_vehicle_number=..." -F "weight=..." -F "file=@..."`).
 - **Web Diagnostics Dashboard**: Modular Flask application factory on port `8080` displaying live scale weight, ANPR status, cloud spool queue counts, error monitoring, and configuration.
-- **Balena-Powered Wi-Fi & Native Captive Portal**: Direct NetworkManager D-Bus control via `balena-io/wifi-connect` with DNS interception, flap-debounced watchdog, live network scanning, persistent SQLite vault, and automatic fallback AP restoration.
+- **Pure nmcli Captive Portal**: Direct NetworkManager control via `nmcli` (zero external binaries) with RFC 8910 DHCP Option 114, RFC 8908 captive API, DNS interception, flap-debounced watchdog, live network scanning, persistent SQLite vault, and automatic fallback AP restoration.
 
 ---
 
@@ -101,7 +101,7 @@ hermes/
     │   ├── __init__.py         # Subpackage exports
     │   ├── scale.py           # UART serial stream reader & line buffer parser
     │   ├── camera.py          # HTTP snapshot / RTSP frame grabber & parallel aux captures
-    │   └── wifi/              # Balena wifi-connect subpackage (process, connection, watchdog, scanner)
+    │   └── wifi/              # Pure nmcli subpackage (hotspot, connection, watchdog, scanner, captive portal)
     ├── integrations/
     │   ├── __init__.py         # Subpackage exports
     │   ├── anpr.py            # Argus ANPR server client & plate voting algorithm
@@ -165,14 +165,13 @@ hermes/
   - Runs parallel multi-ANPR camera frame grabbing via `capture_anpr_snapshots()`.
   - Logs clear camera fleet topology at startup via `log_camera_fleet()`, distinguishing Main (ANPR active loop) from Auxiliary (post-stability audit) cameras.
 - **`WiFi Manager` (`src/devices/wifi/`)**:
-  - Supervised daemon lifecycle for `balena-io/wifi-connect` with automatic fallback hotspot (`hermes` / `12345678`).
-  - Robust multi-path binary discovery (`PATH`, `src/devices/wifi/bin`, `scripts/bin`, `/usr/local/sbin`, `/usr/local/bin`, `/usr/bin`).
-  - Active error logging and process monitoring without silent simulation fallback when real binaries fail to spawn.
+  - Pure nmcli hotspot management (`nmcli device wifi hotspot`) with automatic fallback hotspot (`hermes` / `12345678`).
+  - RFC 8910 DHCP Option 114 + RFC 8908 captive portal API for zero-tap automatic Wi-Fi sheet on Android & iOS.
   - Synchronizes online / offline status with the RGB LED state machine.
 - **`RGB LED Controller` (`src/devices/led/`)**:
   - Hardware driver (`python-periphery` GPIO) and state machine coordinating visual status signals on GPIO 17 (Red), GPIO 27 (Green), and GPIO 22 (Blue).
   - 🟢 **Green**: Standby idle at 0.0 kg and connected to Wi-Fi/Internet; ready for vehicle weighing.
-  - 🟡 **Yellow / Amber**: Offline / Balena captive portal active; weighment operations are immediately stopped and blocked.
+  - 🟡 **Yellow / Amber**: Offline / captive portal hotspot active; weighment operations are immediately stopped and blocked.
   - 🔴 **Solid Red**: Active weighment session in progress on the platform (online only).
   - 🔵 **Blue**: 10-second transient pulse on verified cloud upload success.
 
@@ -258,7 +257,7 @@ Because Python 3.14 on a multi-core Pi 5 supports free-threaded CPython (PEP 703
 | :--- | :--- | :--- | :--- |
 | **`ScaleUART`** | Dedicated Daemon Thread | Continuous (50ms read, 300ms flush) | Reads `/dev/ttyAMA0` serial bytes; never blocks on network or camera I/O. |
 | **`FallbackWebServer`** | Werkzeug WSGI Daemon Thread | Persistent on port `:8080` | Serves web UI and REST API asynchronously without delaying scale operations. |
-| **`WiFiWatchdog`** | Dedicated Daemon Thread | Every 1.0s (pauses probing when hotspot AP is active, process group cleanup and backoff) | Runs network checks, prevents hotspot collision, cleans orphaned dnsmasq ports, detects balena `wifi-connect` exit code 0, and unblocks weighment upon restored connectivity. |
+| **`WiFiWatchdog`** | Dedicated Daemon Thread | Every 1.0s (pauses probing when hotspot AP is active, iptables teardown and backoff) | Runs network checks, prevents hotspot collision, manages captive portal lifecycle, redirects OS probes, and unblocks weighment upon restored connectivity. |
 | **`ANPRLoop_<id>`** | Ephemeral Session Thread | Every 1.0s during weighing | Fetches ANPR snapshots and dispatches async recognition tasks to ThreadPoolExecutor. |
 | **`AuxCapture_<id>`** | Ephemeral Session Worker | Triggered upon 10s stability | Fetches overview angles (Cams 2..N) via `ThreadPoolExecutor(4)` without stalling serial reads. |
 | **`CloudUpload_<id>`** | Ephemeral Daemon Thread | On session finalization (when online) | Directly transmits weighment package and camera snapshots to Gluvok API via multipart POST; non-blocking to scale UART. |
