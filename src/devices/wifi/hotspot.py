@@ -1,61 +1,68 @@
-"""hotspot.py — High-level hotspot and captive portal controller."""
+"""hotspot.py — Manages the emergency Wi-Fi hotspot AP via nmcli."""
 from __future__ import annotations
 
 import logging
-from pathlib import Path
 
-from src.devices.led import led_controller
-from src.devices.wifi.connectivity import is_wifi_connected
+from src.devices.wifi.activity import suspend_watchdog
 from src.devices.wifi.constants import (
-    DEFAULT_ACTIVITY_TIMEOUT,
     DEFAULT_HOTSPOT_PASS,
     DEFAULT_HOTSPOT_SSID,
-    DEFAULT_PORTAL_DHCP_RANGE,
-    DEFAULT_PORTAL_GATEWAY,
-    DEFAULT_PORTAL_PORT,
-    UI_DIR,
+    HOTSPOT_CON_NAME,
 )
-from src.devices.wifi.process import balena_manager
+from src.devices.wifi.ip import get_hotspot_ip
+from src.devices.wifi.runner import (
+    SIMULATION_STATE,
+    get_wifi_interface,
+    is_nmcli_available,
+    run_nmcli,
+)
 
 logger = logging.getLogger(__name__)
+_hotspot_active = False
 
 
-def start_emergency_hotspot(
-    ssid: str = DEFAULT_HOTSPOT_SSID, password: str = DEFAULT_HOTSPOT_PASS,
-    portal_port: int = DEFAULT_PORTAL_PORT, gateway: str = DEFAULT_PORTAL_GATEWAY,
-    dhcp_range: str = DEFAULT_PORTAL_DHCP_RANGE, interface: str | None = None,
-    ui_dir: Path | None = UI_DIR, activity_timeout: int = DEFAULT_ACTIVITY_TIMEOUT,
-) -> bool:
-    """Start balena wifi-connect captive portal access point."""
-    logger.info(f"[WiFi] Initiating balena hotspot AP: SSID='{ssid}'")
-    ok = balena_manager.start_portal(
-        ssid=ssid, password=password, portal_port=portal_port,
-        gateway=gateway, dhcp_range=dhcp_range, interface=interface,
-        ui_dir=ui_dir, activity_timeout=activity_timeout,
-    )
-    if not ok:
-        logger.error(f"[WiFi] Failed to initiate balena hotspot AP: SSID='{ssid}'")
-    led_controller.set_network_status(False)
+def is_hotspot_active(con_name: str = HOTSPOT_CON_NAME) -> bool:
+    if not is_nmcli_available() or SIMULATION_STATE["enabled"]:
+        return bool(SIMULATION_STATE.get("hotspot_active", _hotspot_active))
+    return _hotspot_active
+
+
+def start_hotspot(ssid: str = DEFAULT_HOTSPOT_SSID, password: str = DEFAULT_HOTSPOT_PASS, iface: str | None = None, con_name: str = HOTSPOT_CON_NAME) -> bool:
+    global _hotspot_active
+    if _hotspot_active: return True
+    suspend_watchdog(10.0)
+    if not is_nmcli_available() or SIMULATION_STATE["enabled"]:
+        _hotspot_active = SIMULATION_STATE["hotspot_active"] = True; return True
+    dev = iface or get_wifi_interface()
+    logger.info("[WiFi] Creating emergency hotspot '%s' on %s...", ssid, dev)
+    run_nmcli(["connection", "delete", con_name])
+    run_nmcli(["connection", "add", "type", "wifi", "ifname", dev, "con-name", con_name, "autoconnect", "no", "ssid", ssid])
+    run_nmcli(["connection", "modify", con_name, "802-11-wireless.mode", "ap", "802-11-wireless.band", "bg", "ipv4.method", "shared", "wifi-sec.key-mgmt", "wpa-psk", "wifi-sec.psk", password])
+    code, out = run_nmcli(["connection", "up", con_name])
+    if code != 0:
+        code, out = run_nmcli(["device", "wifi", "hotspot", "ifname", dev, "con-name", con_name, "ssid", ssid, "password", password])
+    _hotspot_active = (code == 0); suspend_watchdog(10.0)
+    msg = f"Hotspot AP '{ssid}' active! IP: {get_hotspot_ip(dev)}" if _hotspot_active else f"Hotspot failed ({code}): {out}"
+    (logger.info if _hotspot_active else logger.error)(f"[WiFi] {msg}")
+    return _hotspot_active
+
+
+def stop_hotspot(con_name: str = HOTSPOT_CON_NAME) -> bool:
+    global _hotspot_active
+    suspend_watchdog(10.0); _hotspot_active = False
+    if not is_nmcli_available() or SIMULATION_STATE["enabled"]:
+        SIMULATION_STATE["hotspot_active"] = False; return True
+    code, _ = run_nmcli(["connection", "down", con_name]); run_nmcli(["connection", "delete", con_name])
+    return code == 0
+
+
+def start_emergency_hotspot(ssid: str = DEFAULT_HOTSPOT_SSID, password: str = DEFAULT_HOTSPOT_PASS, iface: str | None = None) -> bool:
+    from src.devices.wifi.portal_service import portal_service
+    ok = start_hotspot(ssid, password, iface)
+    if ok: portal_service.start()
     return ok
 
 
-def stop_emergency_hotspot(timeout: float = 5.0) -> bool:
-    """Stop the running balena wifi-connect captive portal."""
-    logger.info("[WiFi] Stopping balena hotspot AP...")
-    ok = balena_manager.stop_portal(timeout=timeout)
-    led_controller.set_network_status(is_wifi_connected())
-    return ok
-
-
-def is_hotspot_active() -> bool:
-    """Check if balena wifi-connect AP is currently active."""
-    return balena_manager.is_running()
-
-
-def has_hotspot_connected() -> bool:
-    """Check if balena wifi-connect exited cleanly with code 0."""
-    return balena_manager.has_connected()
-
-
-def get_hotspot_exit_details() -> tuple[int | None, str]:
-    return balena_manager.exit_details()
+def stop_emergency_hotspot(con_name: str = HOTSPOT_CON_NAME) -> bool:
+    from src.devices.wifi.portal_service import portal_service
+    portal_service.stop(); return stop_hotspot(con_name)

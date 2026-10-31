@@ -1,65 +1,60 @@
-"""watchdog.py — Robust background watchdog and automatic hotspot fallback for balena."""
+"""watchdog.py — Flap-debounced background Wi-Fi connectivity watchdog."""
 from __future__ import annotations
 
 import logging
 import threading
+import time
 
-from src.devices.led import led_controller
-from src.devices.wifi import connection as conn
-from src.devices.wifi import connectivity as cty
-from src.devices.wifi import constants as c
-from src.devices.wifi import hotspot as hs
+from src.devices.wifi.activity import is_nmcli_busy, is_watchdog_suspended
+from src.devices.wifi.connectivity import is_network_connected
+from src.devices.wifi.constants import (
+    DEFAULT_FAILURE_THRESHOLD,
+    DEFAULT_WIFI_WATCHDOG_INTERVAL,
+)
+from src.devices.wifi.hotspot import (
+    is_hotspot_active,
+    start_emergency_hotspot,
+    stop_emergency_hotspot,
+)
 
 logger = logging.getLogger(__name__)
 _watchdog_thread: threading.Thread | None = None
-_stop_event, _lock = threading.Event(), threading.RLock()
+_running = False
 
 
-def _handle_status(online: bool, failures: int, threshold: int = 2) -> int:
-    from src.core.stability import scale_state_machine
-    led_controller.set_network_status(online)
-    scale_state_machine.set_network_status(online)
-    if online:
-        if hs.is_hotspot_active(): hs.stop_emergency_hotspot()
-        return 0
-    if (failures := failures + 1) >= threshold and not hs.is_hotspot_active() and not conn.is_connecting():
-        logger.warning("[Watchdog] Wi-Fi lost. Launching balena captive portal...")
-        hs.start_emergency_hotspot()
-        return 0
-    return failures
+def _watchdog_loop(interval: float = DEFAULT_WIFI_WATCHDOG_INTERVAL, threshold: int = DEFAULT_FAILURE_THRESHOLD) -> None:
+    fails = 0
+    while _running:
+        time.sleep(interval)
+        if not _running or is_watchdog_suspended() or is_nmcli_busy(): continue
+        if is_network_connected():
+            fails = 0
+            if is_hotspot_active():
+                logger.info("[Watchdog] Internet restored. Stopping emergency hotspot...")
+                stop_emergency_hotspot()
+        else:
+            fails += 1
+            if fails >= threshold and not is_hotspot_active():
+                logger.warning("[Watchdog] Wi-Fi lost (%d fails). Activating hotspot...", fails)
+                start_emergency_hotspot()
 
 
-def _loop(interval: float) -> None:
-    failures = 0
-    while not _stop_event.is_set():
-        if hs.is_hotspot_active():
-            _stop_event.wait(1.0)
-            continue
-        if hs.has_hotspot_connected():
-            logger.info("[Watchdog] Balena Wi-Fi setup succeeded! Restoring network.")
-            hs.stop_emergency_hotspot()
-            failures = _handle_status(cty.is_network_connected(), 0)
-        elif not conn.is_connecting():
-            code, err = hs.get_hotspot_exit_details()
-            if code is not None and code != 0:
-                logger.error(f"[Watchdog] Balena hotspot exited with code {code}: {err or 'unhandled error'}")
-                hs.stop_emergency_hotspot()
-                failures = -15
-            failures = _handle_status(cty.is_network_connected(), failures) if failures >= 0 else failures + 1
-        _stop_event.wait(interval)
+def start_wifi_watchdog(interval: float = DEFAULT_WIFI_WATCHDOG_INTERVAL) -> bool:
+    global _watchdog_thread, _running
+    if _running and _watchdog_thread and _watchdog_thread.is_alive(): return True
+    _running = True
+    _watchdog_thread = threading.Thread(target=_watchdog_loop, args=(interval,), name="WiFiWatchdog", daemon=True)
+    _watchdog_thread.start()
+    logger.info("[Watchdog] Started Wi-Fi connectivity watchdog (interval=%.1fs)", interval)
+    return True
 
 
-def start_wifi_watchdog(interval: float = c.DEFAULT_WIFI_WATCHDOG_INTERVAL) -> None:
-    global _watchdog_thread
-    with _lock:
-        if not (_watchdog_thread and _watchdog_thread.is_alive()):
-            _stop_event.clear()
-            (_watchdog_thread := threading.Thread(target=_loop, args=(interval,), name="WiFiWatchdog", daemon=True)).start()
+def stop_wifi_watchdog() -> None:
+    global _running, _watchdog_thread
+    _running = False
+    if _watchdog_thread and _watchdog_thread.is_alive(): _watchdog_thread.join(timeout=2.0)
+    _watchdog_thread = None
 
 
-def stop_wifi_watchdog(timeout: float = 3.0) -> None:
-    global _watchdog_thread
-    with _lock:
-        _stop_event.set()
-        if _watchdog_thread and _watchdog_thread.is_alive(): _watchdog_thread.join(timeout=timeout)
-        _watchdog_thread = None
+def is_watchdog_running() -> bool:
+    return bool(_running and _watchdog_thread and _watchdog_thread.is_alive())
