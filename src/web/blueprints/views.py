@@ -41,3 +41,10 @@ def captive_portal_probe() -> Any:
     if not is_wifi_connected():
         return redirect("/wifi", code=302)
     return "", 204
+
+
+@views_bp.route("/.well-known/captive-portal")
+def capport_endpoint() -> Any:
+    """RFC 8908 Captive Portal API endpoint for modern Android and iOS devices."""
+    payload = {"captive": not is_wifi_connected(), "user-portal-url": "http://10.42.0.1/wifi"}
+    return jsonify(payload), 200, {"Content-Type": "application/captive+json"}

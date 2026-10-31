@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Gluvok Hermes — Balena Wi-Fi Setup</title>
+  <title>Gluvok Hermes — Wi-Fi Setup</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Inter", sans-serif; }
     body { background-color: #09090b; color: #fafafa; min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding: 20px 16px; -webkit-font-smoothing: antialiased; }
@@ -13,7 +13,7 @@
     .brand-title { font-size: 0.95rem; font-weight: 800; letter-spacing: -0.02em; color: #fff; display: flex; align-items: center; gap: 6px; }
     .brand-sub { font-size: 0.75rem; color: #71717a; font-family: ui-monospace, SFMono-Regular, monospace; }
     .badge-tag { font-size: 0.65rem; font-weight: 700; padding: 2px 7px; border-radius: 6px; background: rgba(56, 189, 248, 0.12); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.25); }
-    .badge-balena { background: rgba(16, 185, 129, 0.12); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.25); }
+    .badge-nmcli { background: rgba(16, 185, 129, 0.12); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.25); }
     .panel { width: 100%; max-width: 480px; background: #09090b; border: 1px solid #27272a; border-radius: 16px; padding: 24px; box-shadow: 0 12px 32px rgba(0,0,0,0.6); transition: all 0.3s ease; }
     .panel-locked { filter: blur(4px); opacity: 0.25; pointer-events: none; user-select: none; }
     .panel-header { display: flex; align-items: center; justify-content: space-between; padding-bottom: 16px; border-bottom: 1px solid #27272a; margin-bottom: 20px; }
@@ -325,7 +325,7 @@
           pill.textContent = 'ONLINE';
           pill.className = 'status-badge online';
         } else if (data.hotspot) {
-          pill.textContent = 'BALENA AP ACTIVE';
+          pill.textContent = 'HOTSPOT AP ACTIVE';
           pill.className = 'status-badge hotspot';
         }
         if (data.saved && data.saved.length > 0) {
@@ -359,7 +359,7 @@
       btn.disabled = true;
       btn.textContent = `Connecting to ${ssid}...`;
       alert.className = 'alert-box info';
-      alert.textContent = `Handing off credentials to balena-io/wifi-connect for '${ssid}'...`;
+      alert.textContent = `Connecting to '${ssid}' via NetworkManager...`;
       try {
         const ctrl = new AbortController();
         const timeout = setTimeout(() => ctrl.abort(), 65000);
