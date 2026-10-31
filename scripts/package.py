@@ -25,8 +25,8 @@ def create_release_package(
     if (code := build_binary(staging)) != 0:
         return code
 
-    for src, rel in (("src/web/templates", "src/web/templates"), ("src/web/static", "src/web/static")):
-        shutil.copytree(src, os.path.join(staging, rel), dirs_exist_ok=True)
+    for src, rel in (("src/web/templates", "src/web/templates"), ("src/web/static", "src/web/static"), ("src/devices/wifi/ui", "src/devices/wifi/ui")):
+        if os.path.exists(src): shutil.copytree(src, os.path.join(staging, rel), dirs_exist_ok=True)
 
     os.makedirs(os.path.join(staging, "data"), exist_ok=True)
     shutil.copy("pyproject.toml", os.path.join(staging, "pyproject.toml"))

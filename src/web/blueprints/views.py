@@ -39,7 +39,7 @@ def root_networks() -> Any:
 def captive_portal_probe() -> Any:
     """Redirect OS captive portal probes directly to the Wi-Fi setup page."""
     if not is_wifi_connected():
-        return redirect("/wifi", code=302)
+        return redirect("http://10.42.0.1/wifi", code=302)
     return "", 204
 
 

@@ -17,6 +17,7 @@ def build_binary(output_dir: str = "dist") -> int:
         "--include-package=src",
         "--nofollow-imports",
         "--include-package-data=src.web",
+        "--include-package-data=src.devices.wifi",
         "--remove-output",
         "--python-flag=no_docstrings",
         f"--output-dir={output_dir}",
