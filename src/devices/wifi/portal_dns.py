@@ -31,7 +31,7 @@ class CaptiveDNSServer:
 
     def start(self) -> bool:
         if self._running: return True
-        for p in (self.port, 5353, 53):
+        for p in (self.port, 53):
             try:
                 s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
                 s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)

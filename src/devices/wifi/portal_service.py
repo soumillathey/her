@@ -33,7 +33,7 @@ class PortalService:
         ensure_local_domain("hermes.local")
         setup_nm_capport_config(ip)
         self._dns = CaptiveDNSServer(ip=ip, port=dns_port)
-        self._http = CaptiveHTTPServer(port=http_port, iface=iface)
+        self._http = CaptiveHTTPServer(port=http_port, iface=iface, dns_port=dns_port)
         dns_ok, http_ok = self._dns.start(), self._http.start()
         self._active = http_ok
         logger.info("Captive portal status: HTTP=%s, DNS=%s", http_ok, dns_ok)

@@ -35,6 +35,7 @@ from src.devices import (
     led_controller,
     log_camera_fleet,
     start_wifi_watchdog,
+    stop_emergency_hotspot,
     stop_wifi_watchdog,
 )
 from src.web import start_web_server, stop_web_server
@@ -47,6 +48,7 @@ def shutdown(signum, frame):
     get_uart_reader().stop()
     stop_web_server()
     stop_wifi_watchdog()
+    stop_emergency_hotspot()
     session_manager.reset_session()
     sys.exit(0)
 

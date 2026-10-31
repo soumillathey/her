@@ -7,6 +7,8 @@ import shutil
 import subprocess
 import time
 
+from src.devices.wifi.constants import DEFAULT_DNS_PORT
+
 logger = logging.getLogger(__name__)
 
 
@@ -19,13 +21,13 @@ def _run_cmd(cmd: list[str]) -> bool:
 
 
 def kill_stale_portal_listeners(port: int = 80) -> None:
-    """Terminate orphaned web servers or python processes on port."""
-    if shutil.which("fuser"): _run_cmd(["fuser", "-k", "-9", f"{port}/tcp"])
-    for proc_name in ("wifi-connect",): _run_cmd(["pkill", "-9", "-f", proc_name])
+    """Terminate orphaned web servers on the captive portal port."""
+    if port != 8080 and shutil.which("fuser"):
+        _run_cmd(["fuser", "-k", "-9", f"{port}/tcp"])
     time.sleep(0.05)
 
 
-def setup_port_forwarding(iface: str = "wlan0", http_port: int = 80, dns_port: int = 5353) -> bool:
+def setup_port_forwarding(iface: str = "wlan0", http_port: int = 80, dns_port: int = DEFAULT_DNS_PORT) -> bool:
     """Redirect client PREROUTING and local OUTPUT traffic."""
     if not shutil.which("iptables"): return False
     teardown_port_forwarding(iface, http_port, dns_port)
@@ -40,7 +42,7 @@ def setup_port_forwarding(iface: str = "wlan0", http_port: int = 80, dns_port: i
     return True
 
 
-def teardown_port_forwarding(iface: str = "wlan0", http_port: int = 80, dns_port: int = 5353) -> None:
+def teardown_port_forwarding(iface: str = "wlan0", http_port: int = 80, dns_port: int = DEFAULT_DNS_PORT) -> None:
     """Remove active iptables PREROUTING and OUTPUT redirection rules."""
     if not shutil.which("iptables"): return
     hp, dp = str(http_port), str(dns_port)
