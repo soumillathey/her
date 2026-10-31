@@ -8,6 +8,10 @@ from src.devices.wifi.constants import (
     DEFAULT_GATEWAY_IP,
     DEFAULT_PORTAL_PORT,
 )
+from src.devices.wifi.portal_capport import (
+    setup_nm_capport_config,
+    teardown_nm_capport_config,
+)
 from src.devices.wifi.portal_dns import CaptiveDNSServer
 from src.devices.wifi.portal_hosts import ensure_local_domain
 from src.devices.wifi.portal_http import CaptiveHTTPServer
@@ -27,6 +31,7 @@ class PortalService:
     def start(self, ip: str = DEFAULT_GATEWAY_IP, http_port: int = DEFAULT_PORTAL_PORT, dns_port: int = DEFAULT_DNS_PORT, iface: str = "wlan0") -> bool:
         if self._active: return True
         ensure_local_domain("hermes.local")
+        setup_nm_capport_config(ip)
         self._dns = CaptiveDNSServer(ip=ip, port=dns_port)
         self._http = CaptiveHTTPServer(port=http_port, iface=iface)
         dns_ok, http_ok = self._dns.start(), self._http.start()
@@ -35,6 +40,7 @@ class PortalService:
         return self._active
 
     def stop(self) -> None:
+        teardown_nm_capport_config()
         if self._dns: self._dns.stop(); self._dns = None
         if self._http: self._http.stop(); self._http = None
         self._active = False
